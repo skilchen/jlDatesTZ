@@ -1,0 +1,8 @@
+import ../../jlDatesTZ
+let warsaw = initTZInfo("Europe/Warsaw", tzOlson)
+var zdt = initZonedDateTime(initDateTime(1916,4,30,23), warsaw)
+zdt = initZonedDateTime(initDateTime(1916,40,30,23), warsaw, prefer_dst=true)
+echo zdt
+
+zdt = initZonedDateTime(initDateTime(1916,40,30,23), warsaw, prefer_dst=false)
+echo zdt
