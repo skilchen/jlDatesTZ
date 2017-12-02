@@ -3157,11 +3157,11 @@ proc `-`*[P: TimePeriod](zdt: ZonedDateTime, p: P): ZonedDateTime =
 
 proc now*(tzname: string): ZonedDateTime =
   result.utc_datetime = now()
-  result = setTimezone(result, tzname)
+  result = asTimezone(result, tzname)
 
 proc now*(tzinfo: TZInfo): ZonedDateTime =
   result.utc_datetime = now()
-  result = setTimezone(result, tzinfo)
+  result = asTimezone(result, tzinfo)
 
 proc isdst*(zdt: ZonedDateTime): bool =
   result = zdt.zone.offset.dst.value != 0
