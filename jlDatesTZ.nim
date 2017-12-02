@@ -636,6 +636,7 @@ proc value(dt:Date|Time|DateTime): int64 =
 proc value(zdt: ZonedDateTime): int64 =
   result = zdt.utc_datetime.instant.periods.value
 
+proc `cmp`*(dt1, dt2: ZonedDateTime|Date|DateTime|Time): int = value(dt1) - value(dt2)
 proc `==`*(dt1, dt2: Date|DateTime|Time): bool = value(dt1) == value(dt2)
 proc `!=`*(dt1, dt2: Date|Datetime|Time): bool = value(dt1) != value(dt2)
 proc `<=`*(dt1, dt2: ZonedDateTime|DateTime|Date|Time): bool = value(dt1) <= value(dt2)
