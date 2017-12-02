@@ -1769,6 +1769,12 @@ proc floor*[P: TimePeriod](zdt: ZonedDateTime, p: P): ZonedDateTime =
   let utc_dt = dt + zdt.zone.offset
   result = initZonedDateTime(utc_dt, zdt.tzInfo, from_utc=true)
 
+proc floor*[P: TimePeriod](t: Time, p: P): Time =
+  if value(p) < 1:
+    raise newException(ValueError, "invalid value")
+  let ns = value(t)
+  result.instant.periods.value = ns - modulo(ns, tons(p))
+
 proc ceil*[T: Date|DateTime|ZonedDateTime|Time, P: DatePeriod|TimePeriod](dt: T, p: P): T =
   let f = floor(dt, p)
   if `==`(dt, f):
