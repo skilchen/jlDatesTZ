@@ -3026,7 +3026,7 @@ proc getTZInfo*(tzname: string, tztype: TZType = tzPosix): TZInfo =
       result = tzinfo
 
 
-proc astimezone*(zdt: ZonedDateTime, tzname: string): ZonedDateTime =
+proc astimezone*(zdt: ZonedDateTime, tzname: string, is_utc = true, prefer_dst = false): ZonedDateTime =
   result.utc_datetime = zdt.utc_datetime
   try:
     result.tzinfo = getTZInfo(tzname, tzPosix)
@@ -3035,29 +3035,30 @@ proc astimezone*(zdt: ZonedDateTime, tzname: string): ZonedDateTime =
       result.tzinfo = getTZInfo(tzname, tzOlson)
     except:
       raise getCurrentException()
-  result.zone = getCurrentTZData(zdt, result.tzinfo)
+  result.zone = getCurrentTZData(zdt, result.tzinfo, is_utc, prefer_dst)
 
-proc astimezone*(zdt: ZonedDateTime, tzinfo: TZInfo): ZonedDateTime =
+proc astimezone*(zdt: ZonedDateTime, tzinfo: TZInfo, is_utc = true, prefer_dst = false): ZonedDateTime =
   result.utc_datetime = zdt.utc_datetime
   result.tzinfo = tzinfo
-  result.zone = getCurrentTZData(zdt, result.tzinfo)
+  result.zone = getCurrentTZData(zdt, result.tzinfo, is_utc, prefer_dst)
 
-proc setTimezone*(zdt: ZonedDateTime, tzname: string, tztype: TZType = tzPosix): ZonedDateTime =
+proc settimezone*(zdt: ZonedDateTime, tzname: string, tztype: TZType = tzPosix,
+                 is_utc = false, prefer_dst = false): ZonedDateTime =
   ## return a `ZonedDateTime` with the same date/time as `zdt` but with the timezone settings
   ## changed to `tzname` of zone type `tztype`
   ##
   try:
     result.tzinfo = getTZInfo(tzname, tztype)
-    result.zone = getCurrentTZData(zdt, result.tzinfo)
+    result.zone = getCurrentTZData(zdt, result.tzinfo, is_utc, prefer_dst)
     result.utc_datetime = zdt.utc_datetime + result.zone.offset.std
   except:
     try:
       if tzType == tzPosix:
         result.tzinfo = getTZInfo(tzname, tzOlson)
-        result.zone = getCurrentTZData(zdt, result.tzinfo)
+        result.zone = getCurrentTZData(zdt, result.tzinfo, is_utc, prefer_dst)
       else:
         result.tzinfo = getTZInfo(tzname, tzPosix)
-      result.zone = getCurrentTZData(zdt, result.tzinfo)
+      result.zone = getCurrentTZData(zdt, result.tzinfo, is_utc, prefer_dst)
       result.utc_datetime = zdt.utc_datetime + result.zone.offset.std
     except:
       when defined(js):
@@ -3068,8 +3069,6 @@ proc setTimezone*(zdt: ZonedDateTime, tzname: string, tztype: TZType = tzPosix):
         stderr.write(getCurrentExceptionMsg())
         stderr.write("\L")
       raise getCurrentException()
-      #result = settimezone(zdt, "UTC0", tzPosix)
-
 
 proc setTimezone*(zdt: ZonedDateTime, tzinfo: TZInfo, is_utc=true, prefer_dst = false): ZonedDateTime =
   ## return a `ZonedDateTime` with the same date/time as `zdt` but with the timezone settings
@@ -3087,7 +3086,6 @@ proc setTimezone*(zdt: ZonedDateTime, tzinfo: TZInfo, is_utc=true, prefer_dst = 
       stderr.write(getCurrentExceptionMsg())
       stderr.write("\L")
     raise getCurrentException()
-    #result = zdt.setTimeZone("UTC0", tzPosix)
 
 proc utc*(zdt: ZonedDateTime): DateTime =
   result = zdt.utc_datetime
@@ -3095,23 +3093,9 @@ proc utc*(zdt: ZonedDateTime): DateTime =
 proc localtime*(zdt: ZonedDateTime): DateTime =
   result = zdt.utc_datetime - zdt.zone.offset.std
 
-proc timezone*(zdt: ZonedDateTime): TZInfo =
-  zdt.tzinfo
+proc timezone*(zdt: ZonedDateTime): TZInfo = zdt.tzinfo
 
 proc `+`*[P: TimePeriod](zdt: ZonedDateTime, p: P): ZonedDateTime {.inline.}
-
-proc initZonedDateTime*(year: int, month, day: int = 1, hour, minute, second, millisecond: int = 0;
-                        tzname = ""): ZonedDateTime =
-  result.utc_datetime = initDateTime(year, month, day, hour, minute, second, millisecond)
-
-  if tzname == "":
-    result = setTimeZone(result, "UTC0")
-  else:
-    try:
-      result = setTimeZone(result, tzname)
-    except:
-      result = setTimeZone(result, "UTC0", tzPosix)
-
 
 proc initZonedDateTime*(dt: DateTime, tzinfo: TZInfo, from_utc=false, prefer_dst=false): ZonedDateTime =
   result.utc_datetime = dt
@@ -3119,23 +3103,27 @@ proc initZonedDateTime*(dt: DateTime, tzinfo: TZInfo, from_utc=false, prefer_dst
   if from_utc:
     result.utc_datetime = result.utc_datetime - result.zone.offset.std
 
+proc initZonedDateTime*(year: int, month, day: int = 1, hour, minute, second, millisecond: int = 0;
+                        tzinfo: TZInfo, from_utc=false, prefer_dst = false ): ZonedDateTime =
+  let datetime = initDateTime(year, month, day, hour, minute, second, millisecond)
+  result = initZonedDateTime(datetime, tzinfo, from_utc, prefer_dst)
+
+proc initZonedDateTime*(dt: DateTime, tzname: string, from_utc=false, prefer_dst=false): ZonedDateTime =
+  result.utc_datetime = dt
+  var tzinfo: TZInfo
+  try:
+    tzinfo = initTZInfo(tzname, tzPosix)
+  except:
+    try:
+      tzinfo = initTZInfo(tzname, tzOlson)
+    except:
+      raise newException(TimeZoneError, "can't load timezone definition")
+  result = initZonedDateTime(dt, tzinfo, from_utc, prefer_dst)
 
 proc initZonedDateTime*(year: int, month, day: int = 1, hour, minute, second, millisecond: int = 0;
-                        tzinfo: TZInfo = nil, from_utc=false, prefer_dst = false ): ZonedDateTime =
-  result.utc_datetime = initDateTime(year, month, day, hour, minute, second, millisecond)
-  if not isNil(tzInfo):
-    result = setTimezone(result, tzInfo, from_utc, prefer_dst)
-#  result.tzinfo = tzinfo
-  result.utc_datetime = result.utc_datetime #+ Days(day)
-  #result = result + Days(day)
-
-
-proc initZonedDateTime*(dt: DateTime, tzname: string): ZonedDateTime =
-  result.utc_datetime = dt
-  try:
-    result = setTimeZone(result, tzname)
-  except:
-    result = setTimeZone(result, "UTC0", tzPosix)
+                        tzname = "", from_utc=false, prefer_dst=false): ZonedDateTime =
+  let datetime = initDateTime(year, month, day, hour, minute, second, millisecond)
+  result = initZonedDateTime(datetime, tzname, from_utc, prefer_dst)
 
 proc `+`*(zdt: ZonedDateTime): ZonedDateTime = zdt
 
