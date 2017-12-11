@@ -1389,6 +1389,9 @@ proc rata2iso*(days: int64): ISOWeekDate =
 proc isoweekdate*(dt: DateTime|Date): ISOWeekDate =
   result = rata2iso(datetime2rata(dt))
 
+proc iso2date*(iwd:ISOWeekDate): Date =
+  result = rata2date(iso2rata(iwd))
+
 proc now*(): DateTime =
   return unix2datetime(epochTime())
 
@@ -2313,7 +2316,7 @@ proc strftime*[T: Date|DateTime|ZonedDateTime](dt_in: T, fmtstr: string, locale 
         result.add(intToStr(dt.year.int, 4))
       of 'z':
         if not isNil(zone):
-          if zone.offset.dst.value <= 0:
+          if zone.offset.std.value <= 0:
             result.add("+")
           else:
             result.add("-")
@@ -2333,21 +2336,32 @@ proc strftime*[T: Date|DateTime|ZonedDateTime](dt_in: T, fmtstr: string, locale 
     elif fmtstr[i] == '$':
       inc(i)
       if len(fmtstr[i..^1]) >= 3 and fmtstr[i..i+2] == "iso":
-        result.add(dt.strftime("%Y-%m-%dT%H:%M:%S"))
+        if isNil(zone):
+          result.add(dt.strftime("%Y-%m-%dT%H:%M:%S"))
+        else:
+          result.add(dt.strftime("%Y-%m-%dT%H:%M:%S%z"))
         inc(i, 2)
       elif len(fmtstr[i..^1]) >= 4 and fmtstr[i..i+3] == "wiso":
         result.add(dt.strftime("%G-W%V-%u"))
         inc(i, 3)
       elif len(fmtstr[i..^1]) >= 4 and fmtstr[i..i+3] == "http":
+        if not isNil(zone):
+          dt = dt + zone.offset.std
         result.add(dt.strftime("%a, %d %b %Y %T GMT"))
         inc(i, 3)
       elif len(fmtstr[i..^1]) >=  5 and fmtstr[i..i+4] == "ctime":
+        if not isNil(zone):
+          dt = dt + zone.offset.std
         result.add(dt.strftime("%a %b %d %T GMT %Y"))
         inc(i, 4)
       elif len(fmtstr[i..^1]) >= 6 and fmtstr[i..i+5] == "rfc850":
+        if not isNil(zone):
+          dt = dt + zone.offset.std
         result.add(dt.strftime("%A, %d-%b-%y %T GMT"))
         inc(i, 5)
       elif len(fmtstr[i..^1]) >= 7 and fmtstr[i..i+6] == "rfc1123":
+        if not isNil(zone):
+          dt = dt + zone.offset.std
         result.add(dt.strftime("%a, %d %b %Y %T GMT"))
         inc(i, 6)
       elif len(fmtstr[i..^1]) >= 7 and fmtstr[i..i+6] == "rfc3339":
@@ -2355,10 +2369,30 @@ proc strftime*[T: Date|DateTime|ZonedDateTime](dt_in: T, fmtstr: string, locale 
         if dt.millisecond > 0:
           result.add(".")
           result.add(align($dt.millisecond, 3, '0'))
-        result.add("+00:00")
+        if not isNil(zone):
+          if zone.name == "UTC" and zone.offset.std.value == 0:
+            result.add("Z")
+          else:
+            if zone.offset.std.value <= 0:
+              result.add("+")
+            else:
+              result.add("-")
+            let (h, r) = divrem(abs(zone.offset.std.value), 3600)
+            let (m, s) = divrem(r, 60)
+            result.add(intToStr(h.int, 2))
+            result.add(":")
+            result.add(intToStr(m.int, 2))
+            if s > 0:
+              result.add(":")
+              result.add(intToStr(s.int, 2))
+        else:
+          result.add("+00:00")
         inc(i, 6)
       elif len(fmtstr[i..^1]) >= 7 and fmtstr[i..i+6] == "asctime":
-        result.add(dt.strftime("%a %b %d %T %Y"))
+        if isNil(zone):
+          result.add(dt.strftime("%a %b %d %T %Y"))
+        else:
+          result.add(dt.strftime("%a %b %d %T %Y %z"))
         inc(i, 6)
     else:
       result.add(fmtstr[i])
@@ -3124,6 +3158,12 @@ proc initZonedDateTime*(year: int, month, day: int = 1, hour, minute, second, mi
                         tzname = "", from_utc=false, prefer_dst=false): ZonedDateTime =
   let datetime = initDateTime(year, month, day, hour, minute, second, millisecond)
   result = initZonedDateTime(datetime, tzname, from_utc, prefer_dst)
+
+proc astimezone*(dt: DateTime, tzname: string): ZonedDateTime =
+  result = initZonedDateTime(dt, tzname="UTC0").astimezone(tzname)
+
+proc astimezone*(dt: DateTime, tzinfo: TZInfo): ZonedDateTime =
+  result = initZonedDateTime(dt, tzname="UTC0").astimezone(tzinfo)
 
 proc `+`*(zdt: ZonedDateTime): ZonedDateTime = zdt
 
